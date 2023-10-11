@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"github.com/tedjoskb/go-restapi-fiber/controllers/bookcontroller"
+	bookcontroller "github.com/tedjoskb/go-restapi-fiber/controllers"
 	"github.com/tedjoskb/go-restapi-fiber/database"
 	"github.com/tedjoskb/go-restapi-fiber/database/migration"
 )

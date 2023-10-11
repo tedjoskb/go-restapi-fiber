@@ -13,6 +13,7 @@ type Users struct {
 	Address   string         `gorm:"type:text" json:"address"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
+	IsDeleted bool           `gorm:"type:boolean" json:"is_deleted"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 	Account   Account        `gorm:"foreignKey:UserID"` // Menunjukkan kunci asing
 }

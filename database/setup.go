@@ -1,7 +1,8 @@
 package database
 
 import (
-	"github.com/tedjoskb/go-restapi-fiber/models"
+	"log"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -9,13 +10,13 @@ import (
 var DB *gorm.DB
 
 func ConnectionDatabase() {
-	conn := "host=localhost user=postgres password=admin dbname=go_restapi_fiber port=5432 sslmode=disable TimeZone=Asia/Jakarta"
+	conn := "host=localhost user=root password=root dbname=simpleBank port=8001 sslmode=disable TimeZone=Asia/Jakarta"
 	db, err := gorm.Open(postgres.Open(conn), &gorm.Config{})
 
 	if err != nil {
-		panic(err)
+		log.Println(err)
 	}
 
-	db.AutoMigrate(models.Book{})
+	// db.AutoMigrate(&models.Book{})
 	DB = db
 }

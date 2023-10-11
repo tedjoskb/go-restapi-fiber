@@ -4,10 +4,12 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/tedjoskb/go-restapi-fiber/controllers/bookcontroller"
 	"github.com/tedjoskb/go-restapi-fiber/database"
+	"github.com/tedjoskb/go-restapi-fiber/database/migration"
 )
 
 func main() {
 	database.ConnectionDatabase()
+	migration.RunMigration()
 
 	app := fiber.New()
 

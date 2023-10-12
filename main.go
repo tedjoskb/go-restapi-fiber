@@ -2,12 +2,13 @@ package main
 
 import (
 	"github.com/gofiber/fiber/v2"
-	bookcontroller "github.com/tedjoskb/go-restapi-fiber/controllers"
 	"github.com/tedjoskb/go-restapi-fiber/database"
 	"github.com/tedjoskb/go-restapi-fiber/database/migration"
+	"github.com/tedjoskb/go-restapi-fiber/route"
 )
 
 func main() {
+
 	database.ConnectionDatabase()
 	migration.RunMigration()
 
@@ -17,15 +18,7 @@ func main() {
 		return c.SendString("Hello, This is Fiber!")
 	})
 
-	// /api/books/1
-	api := app.Group("/api")
-	book := api.Group("/books")
-
-	book.Get("/", bookcontroller.Index)
-	book.Get("/:id", bookcontroller.Show)
-	book.Post("/", bookcontroller.Create)
-	book.Put("/:id", bookcontroller.Update)
-	book.Delete("/:id", bookcontroller.Delete)
+	route.RouteInit(app)
 
 	app.Listen(":3000")
 

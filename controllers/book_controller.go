@@ -1,4 +1,4 @@
-package bookcontroller
+package controllers
 
 import (
 	"net/http"

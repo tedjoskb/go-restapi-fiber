@@ -3,6 +3,7 @@ package controllers
 import (
 	"net/http"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 	"github.com/tedjoskb/go-restapi-fiber/database"
 	"github.com/tedjoskb/go-restapi-fiber/models"
@@ -47,20 +48,43 @@ func GetUserById(c *fiber.Ctx) error {
 }
 
 func CreateUser(c *fiber.Ctx) error {
-	var book models.Book
-	if err := c.BodyParser(&book); err != nil {
+	var userCreate models.UserCreate
+	if err := c.BodyParser(&userCreate); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
 
-	if err := database.DB.Create(&book).Error; err != nil {
+	validate := validator.New()
+
+	errValidate := validate.Struct(userCreate)
+
+	if errValidate != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "failed",
+			"error":   errValidate.Error(),
+		})
+	}
+
+	newUser := models.Users{
+		Name:      userCreate.Name,
+		Email:     userCreate.Email,
+		Address:   userCreate.Address,
+		IsDeleted: false,
+	}
+
+	if err := database.DB.Create(&newUser).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
 
-	return c.JSON(book)
+	result := c.Status(http.StatusOK).JSON(fiber.Map{
+		"data":    newUser,
+		"message": "Success",
+	})
+
+	return result
 
 }
 

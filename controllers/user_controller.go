@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
@@ -16,6 +17,12 @@ func GetUserAll(c *fiber.Ctx) error {
 		Where("is_deleted = ?", false).
 		Find(&users)
 
+	// Mengkonversi Unix timestamp ke dalam format tanggal yang dapat dibaca
+	for i, user := range users {
+		users[i].CreatedAtFormatted = time.Unix(0, user.CreatedAt*int64(time.Millisecond)).Format("2023-01-01 15:04:05")
+		users[i].UpdatedAtFormatted = time.Unix(0, user.UpdatedAt*int64(time.Millisecond)).Format("2023-01-01 15:04:05")
+	}
+
 	result := c.Status(http.StatusOK).JSON(fiber.Map{
 		"data":    users,
 		"message": "Success",
@@ -26,21 +33,26 @@ func GetUserAll(c *fiber.Ctx) error {
 
 func GetUserById(c *fiber.Ctx) error {
 	id := c.Params("id")
-	var users models.Users
-	if err := database.DB.First(&users, id).Error; err != nil {
+	var user models.Users
+
+	if err := database.DB.First(&user, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return c.Status(http.StatusNotFound).JSON(fiber.Map{
-				"message": "data tidak ditemukan!",
+				"message": "Data tidak ditemukan!",
 			})
 		}
 
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-			"message": "data tidak ditemukan!",
+			"message": "Terjadi kesalahan saat mengambil data!",
 		})
 	}
 
+	// Mengonversi waktu CreatedAt dan UpdatedAt ke dalam format yang diinginkan
+	user.CreatedAtFormatted = time.Unix(0, user.CreatedAt*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+	user.UpdatedAtFormatted = time.Unix(0, user.UpdatedAt*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+
 	result := c.Status(http.StatusOK).JSON(fiber.Map{
-		"data":    users,
+		"data":    user,
 		"message": "Success",
 	})
 
@@ -71,8 +83,16 @@ func CreateUser(c *fiber.Ctx) error {
 			Name:      userCreate.Name,
 			Email:     userCreate.Email,
 			Address:   userCreate.Address,
+			CreatedAt: time.Now().UnixMilli(), // Mengatur created_at ke Unix timestamp dalam milidetik
+			UpdatedAt: time.Now().UnixMilli(),
+			DeletedAt: 0,
 			IsDeleted: false,
 		}
+		// show data response convertan epoch time (unix) tanpa dimasukin ke database
+		newUser.CreatedAtFormatted = time.Unix(0, newUser.CreatedAt*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+		newUser.UpdatedAtFormatted = time.Unix(0, newUser.UpdatedAt*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+		newUser.DeletedAtFormatted = ""
+
 		newUsers = append(newUsers, newUser)
 	}
 
@@ -109,9 +129,10 @@ func UpdateUser(c *fiber.Ctx) error {
 	}
 
 	Update := models.Users{
-		Name:    UpdateUser.Name,
-		Address: UpdateUser.Address,
-		Email:   UpdateUser.Email,
+		Name:      UpdateUser.Name,
+		Address:   UpdateUser.Address,
+		Email:     UpdateUser.Email,
+		UpdatedAt: time.Now().UnixMilli(),
 	}
 
 	if database.DB.Where("id = ?", id).Updates(&Update).RowsAffected == 0 {
@@ -126,23 +147,58 @@ func UpdateUser(c *fiber.Ctx) error {
 }
 
 func UpdateMultipleUsers(c *fiber.Ctx) error {
-	var updateRequests []models.Users // Ubah dengan struct Anda sendiri
+	var updateRequests []models.Users // Sesuaikan dengan struktur Anda sendiri
 	if err := c.BodyParser(&updateRequests); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
 
+	// loc, err := time.LoadLocation("Asia/Jakarta")
+	// if err != nil {
+	// 	panic(err)
+	// }
+
 	for _, updateRequest := range updateRequests {
+
 		update := models.Users{
-			Name:    updateRequest.Name,
-			Address: updateRequest.Address,
+			ID:        updateRequest.ID,
+			Name:      updateRequest.Name,
+			Address:   updateRequest.Address,
+			Email:     updateRequest.Email,
+			UpdatedAt: time.Now().UnixMilli(), // Menggunakan waktu yang sesuai dengan zona masing-masing (in unix time)
+			DeletedAt: time.Now().UnixMilli(),
+			IsDeleted: updateRequest.IsDeleted,
 		}
 
-		if database.DB.Where("id = ?", updateRequest.ID).Updates(&update).RowsAffected == 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"message": "Tidak dapat mengupdate data dengan ID " + string(updateRequest.ID),
-			})
+		if updateRequest.IsDeleted {
+			// Gunakan Unscoped untuk mengatur DeletedAt saat IsDeleted true
+			if err := database.DB.Model(&update).
+				Where("id = ?", updateRequest.ID).
+				Update("Name", update.Name).
+				Update("Address", update.Address).
+				Update("Email", update.Email).
+				Update("UpdatedAt", update.UpdatedAt).
+				Update("DeletedAt", update.DeletedAt).
+				Update("IsDeleted", true).Error; err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"message": "Tidak dapat mengupdate data dengan ID " + string(updateRequest.ID),
+				})
+			}
+		} else {
+			// Jika IsDeleted false, hanya mengupdate IsDeleted tanpa menyentuh DeletedAt
+			if err := database.DB.Model(&update).
+				Where("id = ?", updateRequest.ID).
+				Update("Name", update.Name).
+				Update("Address", update.Address).
+				Update("Email", update.Email).
+				Update("UpdatedAt", update.UpdatedAt).
+				Update("DeletedAt", update.DeletedAt).
+				Update("IsDeleted", false).Error; err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"message": "Tidak dapat mengupdate data dengan ID " + string(updateRequest.ID),
+				})
+			}
 		}
 	}
 

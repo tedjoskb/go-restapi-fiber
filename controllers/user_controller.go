@@ -48,8 +48,8 @@ func GetUserById(c *fiber.Ctx) error {
 }
 
 func CreateUser(c *fiber.Ctx) error {
-	var userCreate models.UserCreate
-	if err := c.BodyParser(&userCreate); err != nil {
+	var userCreates []models.UserCreate
+	if err := c.BodyParser(&userCreates); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": err.Error(),
 		})
@@ -57,31 +57,42 @@ func CreateUser(c *fiber.Ctx) error {
 
 	validate := validator.New()
 
-	errValidate := validate.Struct(userCreate)
+	// Loop melalui array pengguna yang akan dibuat
+	var newUsers []models.Users
+	var validationErrors []error
+	for _, userCreate := range userCreates {
+		errValidate := validate.Struct(userCreate)
+		if errValidate != nil {
+			validationErrors = append(validationErrors, errValidate)
+			continue
+		}
 
-	if errValidate != nil {
+		newUser := models.Users{
+			Name:      userCreate.Name,
+			Email:     userCreate.Email,
+			Address:   userCreate.Address,
+			IsDeleted: false,
+		}
+		newUsers = append(newUsers, newUser)
+	}
+
+	if len(validationErrors) > 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "failed",
-			"error":   errValidate.Error(),
+			"message": "Some users failed validation",
+			"errors":  validationErrors,
 		})
 	}
 
-	newUser := models.Users{
-		Name:      userCreate.Name,
-		Email:     userCreate.Email,
-		Address:   userCreate.Address,
-		IsDeleted: false,
-	}
-
-	if err := database.DB.Create(&newUser).Error; err != nil {
+	// Simpan pengguna yang valid ke database
+	if err := database.DB.Create(&newUsers).Error; err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
 
 	result := c.Status(http.StatusOK).JSON(fiber.Map{
-		"data":    newUser,
-		"message": "Success",
+		"data":    newUsers,
+		"message": "Users created successfully",
 	})
 
 	return result
@@ -90,16 +101,49 @@ func CreateUser(c *fiber.Ctx) error {
 
 func UpdateUser(c *fiber.Ctx) error {
 	id := c.Params("id")
-	var book models.Book
-	if err := c.BodyParser(&book); err != nil {
+	var UpdateUser models.UserUpdate
+	if err := c.BodyParser(&UpdateUser); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
-	if database.DB.Where("id = ?", id).Updates(&book).RowsAffected == 0 {
+
+	Update := models.Users{
+		Name:    UpdateUser.Name,
+		Address: UpdateUser.Address,
+		Email:   UpdateUser.Email,
+	}
+
+	if database.DB.Where("id = ?", id).Updates(&Update).RowsAffected == 0 {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": "tidak dapat mengupdate data",
 		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "Data Berhasil Diupdate",
+	})
+}
+
+func UpdateMultipleUsers(c *fiber.Ctx) error {
+	var updateRequests []models.Users // Ubah dengan struct Anda sendiri
+	if err := c.BodyParser(&updateRequests); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": err.Error(),
+		})
+	}
+
+	for _, updateRequest := range updateRequests {
+		update := models.Users{
+			Name:    updateRequest.Name,
+			Address: updateRequest.Address,
+		}
+
+		if database.DB.Where("id = ?", updateRequest.ID).Updates(&update).RowsAffected == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"message": "Tidak dapat mengupdate data dengan ID " + string(updateRequest.ID),
+			})
+		}
 	}
 
 	return c.JSON(fiber.Map{

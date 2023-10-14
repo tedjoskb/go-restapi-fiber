@@ -16,6 +16,8 @@ func RouteInit(r *fiber.App) {
 	users.Get("/", controllers.GetUserAll)
 	users.Get("/:id", controllers.GetUserById)
 	users.Post("/", controllers.CreateUser)
+	users.Put("/:id", controllers.UpdateUser)
+	users.Post("/update-multiple", controllers.UpdateMultipleUsers)
 
 	book := api.Group("/books")
 	book.Get("/", controllers.Index)

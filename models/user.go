@@ -23,3 +23,13 @@ type UserCreate struct {
 	Email   string `gorm:"type:varchar(100)" json:"email" validate:"required"`
 	Address string `gorm:"type:text" json:"address" validate:"required"`
 }
+
+type UserUpdate struct {
+	Name    string `gorm:"type:varchar(300)" json:"name" validate:"required"`
+	Address string `gorm:"type:text" json:"address" validate:"required"`
+	Email   string `gorm:"type:varchar(100)" json:"email" validate:"required"`
+}
+
+type UserEmailRequest struct {
+	Email string `gorm:"type:varchar(100)" json:"email" validate:"required"`
+}

@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -121,82 +122,133 @@ func CreateUser(c *fiber.Ctx) error {
 
 func UpdateUser(c *fiber.Ctx) error {
 	id := c.Params("id")
-	var UpdateUser models.UserUpdate
-	if err := c.BodyParser(&UpdateUser); err != nil {
+	var RequestUpdateUser models.UserUpdate
+	if err := c.BodyParser(&RequestUpdateUser); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
 
-	Update := models.Users{
-		Name:      UpdateUser.Name,
-		Address:   UpdateUser.Address,
-		Email:     UpdateUser.Email,
-		UpdatedAt: time.Now().UnixMilli(),
-	}
+	var existingUser models.Users
+	if err := database.DB.First(&existingUser, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"message": "Data tidak ditemukan!",
+			})
+		}
 
-	if database.DB.Where("id = ?", id).Updates(&Update).RowsAffected == 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "tidak dapat mengupdate data",
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Terjadi kesalahan saat mengambil data!",
 		})
 	}
 
+	if existingUser.IsDeleted {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "Data dengan ID " + id + " telah dihapus!",
+		})
+	}
+
+	update := models.Users{
+		Name:      RequestUpdateUser.Name,
+		Address:   RequestUpdateUser.Address,
+		Email:     RequestUpdateUser.Email,
+		UpdatedAt: time.Now().UnixMilli(),
+	}
+
+	// if database.DB.Where("id = ?", id).Updates(&book).RowsAffected == 0 {
+	// 	return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+	// 		"message": "tidak dapat mengupdate data",
+	// 	})
+	// }
+
+	if err := database.DB.Model(&update).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"Name":      update.Name,
+			"Address":   update.Address,
+			"Email":     update.Email,
+			"UpdatedAt": update.UpdatedAt,
+		}).Error; err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "Tidak dapat mengupdate data dengan ID " + id,
+		})
+	}
+
+	// menjabarkan timestamp data yang sudah diupdate
+	existingUser.CreatedAtFormatted = time.Unix(0, existingUser.CreatedAt*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+	existingUser.UpdatedAtFormatted = time.Unix(0, existingUser.UpdatedAt*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+	existingUser.DeletedAtFormatted = time.Unix(0, existingUser.DeletedAt*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+
 	return c.JSON(fiber.Map{
 		"message": "Data Berhasil Diupdate",
+		"data":    &existingUser,
 	})
 }
 
 func UpdateMultipleUsers(c *fiber.Ctx) error {
-	var updateRequests []models.Users // Sesuaikan dengan struktur Anda sendiri
+	var updateRequests []models.UserUpdateBulky
+
 	if err := c.BodyParser(&updateRequests); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
 
-	// loc, err := time.LoadLocation("Asia/Jakarta")
-	// if err != nil {
-	// 	panic(err)
-	// }
-
 	for _, updateRequest := range updateRequests {
+		// Mencari pengguna yang ada
+		var existingUser models.Users
+		if err := database.DB.First(&existingUser, updateRequest.ID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"message": "Data dengan ID " + strconv.Itoa(int(updateRequest.ID)) + " tidak ditemukan!",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "Terjadi kesalahan saat mengambil data!",
+			})
+		}
 
+		// Lanjutkan dengan pemrosesan update
 		update := models.Users{
 			ID:        updateRequest.ID,
 			Name:      updateRequest.Name,
 			Address:   updateRequest.Address,
 			Email:     updateRequest.Email,
-			UpdatedAt: time.Now().UnixMilli(), // Menggunakan waktu yang sesuai dengan zona masing-masing (in unix time)
+			UpdatedAt: time.Now().UnixMilli(),
 			DeletedAt: time.Now().UnixMilli(),
 			IsDeleted: updateRequest.IsDeleted,
 		}
 
-		if updateRequest.IsDeleted {
-			// Gunakan Unscoped untuk mengatur DeletedAt saat IsDeleted true
+		if updateRequest.IsDeleted == true {
+			// Proses update jika isDeleted == true
 			if err := database.DB.Model(&update).
 				Where("id = ?", updateRequest.ID).
-				Update("Name", update.Name).
-				Update("Address", update.Address).
-				Update("Email", update.Email).
-				Update("UpdatedAt", update.UpdatedAt).
-				Update("DeletedAt", update.DeletedAt).
-				Update("IsDeleted", true).Error; err != nil {
+				Updates(map[string]interface{}{
+					"Name":      update.Name,
+					"Address":   update.Address,
+					"Email":     update.Email,
+					"UpdatedAt": update.UpdatedAt,
+					"DeletedAt": update.DeletedAt,
+					"IsDeleted": true,
+				}).Error; err != nil {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"message": "Tidak dapat mengupdate data dengan ID " + string(updateRequest.ID),
+					"message": "Tidak dapat mengupdate data dengan ID " + strconv.Itoa(int(updateRequest.ID)),
 				})
 			}
 		} else {
-			// Jika IsDeleted false, hanya mengupdate IsDeleted tanpa menyentuh DeletedAt
+			// Proses update jika isDeleted == false
 			if err := database.DB.Model(&update).
 				Where("id = ?", updateRequest.ID).
-				Update("Name", update.Name).
-				Update("Address", update.Address).
-				Update("Email", update.Email).
-				Update("UpdatedAt", update.UpdatedAt).
-				Update("DeletedAt", update.DeletedAt).
-				Update("IsDeleted", false).Error; err != nil {
+				Updates(map[string]interface{}{
+					"Name":      update.Name,
+					"Address":   update.Address,
+					"Email":     update.Email,
+					"UpdatedAt": update.UpdatedAt,
+					"DeletedAt": 0,
+					"IsDeleted": false,
+				}).Error; err != nil {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"message": "Tidak dapat mengupdate data dengan ID " + string(updateRequest.ID),
+					"message": "Tidak dapat mengupdate data dengan ID " + strconv.Itoa(int(updateRequest.ID)),
 				})
 			}
 		}
@@ -207,21 +259,79 @@ func UpdateMultipleUsers(c *fiber.Ctx) error {
 	})
 }
 
-func DeleteUser(c *fiber.Ctx) error {
-	id := c.Params("id")
-	var book models.Book
-	if err := c.BodyParser(&book); err != nil {
+func SoftDeleteUser(c *fiber.Ctx) error {
+
+	var deleteRequest []models.SoftDeleteUser
+
+	if err := c.BodyParser(&deleteRequest); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
-	if database.DB.Where("id = ?", id).Delete(&book).RowsAffected == 0 {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"message": "tidak dapat menghapus data",
-		})
+
+	for _, updateRequest := range deleteRequest {
+		// Mencari pengguna yang ada
+		var existingUser models.Users
+		if err := database.DB.First(&existingUser, updateRequest.ID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"message": "Data dengan ID " + strconv.Itoa(int(updateRequest.ID)) + " tidak ditemukan!",
+				})
+			}
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "Terjadi kesalahan saat mengambil data!",
+			})
+		}
+
+		// Lanjutkan dengan pemrosesan update
+		update := models.Users{
+			ID:        updateRequest.ID,
+			UpdatedAt: time.Now().UnixMilli(),
+			DeletedAt: time.Now().UnixMilli(),
+			IsDeleted: true,
+		}
+
+		if existingUser.ID != 0 {
+			// Proses update jika id tidak null
+			if err := database.DB.Model(&update).
+				Where("id = ?", update.ID).
+				Updates(map[string]interface{}{
+					"UpdatedAt": update.UpdatedAt,
+					"DeletedAt": update.DeletedAt,
+					"IsDeleted": true,
+				}).Error; err != nil {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"message": "Tidak dapat mengupdate data dengan ID " + strconv.Itoa(int(updateRequest.ID)),
+				})
+			}
+		} else {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"message": "Terjadi kesalahan!",
+			})
+		}
 	}
 
 	return c.JSON(fiber.Map{
-		"message": "Data Berhasil Menghapus",
+		"message": "Data Berhasil Dihapus!",
 	})
+
 }
+
+// func DeleteUser(c *fiber.Ctx) error {
+// 	id := c.Params("id")
+// 	var book models.Book
+// 	if err := c.BodyParser(&book); err != nil {
+// 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+// 			"message": err.Error(),
+// 		})
+// 	}
+// 	if database.DB.Where("id = ?", id).Delete(&book).RowsAffected == 0 {
+// 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+// 			"message": "tidak dapat menghapus data",
+// 		})
+// 	}
+
+// 	return c.JSON(fiber.Map{
+// 		"message": "Data Berhasil Menghapus",
+// 	})
+// }

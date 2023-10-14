@@ -35,6 +35,18 @@ type UserUpdate struct {
 	Email   string `gorm:"type:varchar(100)" json:"email" validate:"required"`
 }
 
+type UserUpdateBulky struct {
+	ID        int64  `gorm:"primaryKey;autoIncrement" json:"user_id"`
+	Name      string `gorm:"type:varchar(300)" json:"name"`
+	Email     string `gorm:"type:varchar(100)" json:"email"`
+	Address   string `gorm:"type:text" json:"address"`
+	IsDeleted bool   `gorm:"type:boolean" json:"is_deleted"`
+}
+
+type SoftDeleteUser struct {
+	ID int64 `gorm:"primaryKey;autoIncrement" json:"user_id"`
+}
+
 type UserEmailRequest struct {
 	Email string `gorm:"type:varchar(100)" json:"email" validate:"required"`
 }

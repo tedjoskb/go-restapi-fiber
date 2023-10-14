@@ -18,6 +18,7 @@ func RouteInit(r *fiber.App) {
 	users.Post("/", controllers.CreateUser)
 	users.Put("/:id", controllers.UpdateUser)
 	users.Post("/update-multiple", controllers.UpdateMultipleUsers)
+	users.Post("/delete-user", controllers.SoftDeleteUser)
 
 	book := api.Group("/books")
 	book.Get("/", controllers.Index)

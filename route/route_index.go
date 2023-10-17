@@ -2,12 +2,13 @@ package route
 
 import (
 	"github.com/gofiber/fiber/v2"
+	"github.com/tedjoskb/go-restapi-fiber/config"
 	"github.com/tedjoskb/go-restapi-fiber/controllers"
 )
 
 func RouteInit(r *fiber.App) {
 
-	r.Get("/user", controllers.GetUserAll)
+	r.Static("/public", config.ProjectRootPath+"/public/asset") //route folder asset (utk gambar,file dll)
 
 	// /api/
 	api := r.Group("/api")

@@ -4,6 +4,7 @@ type Users struct {
 	ID                 int64  `gorm:"primaryKey;autoIncrement" json:"user_id"`
 	Name               string `gorm:"type:varchar(300)" json:"name"`
 	Email              string `gorm:"type:varchar(100)" json:"email"`
+	Password           string `gorm:"type:varchar(255)" json:"password"`
 	Address            string `gorm:"type:text" json:"address"`
 	CreatedAt          int64  `json:"created_at"`
 	UpdatedAt          int64  `json:"updated_at"`
@@ -14,13 +15,6 @@ type Users struct {
 	DeletedAtFormatted string `json:"deleted_at_formatted" gorm:"-"`
 
 	// Account   Account        `gorm:"foreignKey:UserID"` // Menunjukkan kunci asing
-
-	//  atribut inline struct untuk format waktu agar tidak termigrasi ke database
-	// TimeFormats struct {
-	// 	CreatedAtFormatted string `json:"created_at_formatted"`
-	// 	UpdatedAtFormatted string `json:"updated_at_formatted"`
-	// 	DeletedAtFormatted string `json:"deleted_at_formatted"`
-	// } `gorm:"-"`
 }
 
 type UserCreate struct {

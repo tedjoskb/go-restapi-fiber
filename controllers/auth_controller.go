@@ -3,9 +3,11 @@ package controllers
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/tedjoskb/go-restapi-fiber/database"
 	"github.com/tedjoskb/go-restapi-fiber/helper"
 	"github.com/tedjoskb/go-restapi-fiber/models"
@@ -42,7 +44,7 @@ func Login(ctx *fiber.Ctx) error {
 			})
 		}
 
-		return ctx.Status(http.StatusInternalServerError).JSON(fiber.Map{
+		return ctx.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"message": "Terjadi kesalahan saat mengambil data!",
 			"error":   err.Error(),
 		})
@@ -56,8 +58,25 @@ func Login(ctx *fiber.Ctx) error {
 		})
 	}
 
+	// generate token jwt
+
+	claims := jwt.MapClaims{}
+	claims["name"] = user.Name
+	claims["email"] = user.Email
+	claims["address"] = user.Address
+	claims["iat"] = time.Now().Unix()
+	claims["exp"] = time.Now().Add(time.Minute * 2).Unix()
+
+	token, errGenerateToken := helper.GenerateToken(&claims)
+	if errGenerateToken != nil {
+		return ctx.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"message": errGenerateToken.Error(),
+		})
+	}
+
 	return ctx.JSON(fiber.Map{
-		"token": "secret",
+		"token":   token,
+		"message": "success",
 	})
 
 }

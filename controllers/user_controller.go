@@ -3,11 +3,12 @@ package controllers
 import (
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
-	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 	"github.com/tedjoskb/go-restapi-fiber/database"
+	"github.com/tedjoskb/go-restapi-fiber/helper"
 	"github.com/tedjoskb/go-restapi-fiber/models"
 	"gorm.io/gorm"
 )
@@ -68,48 +69,103 @@ func CreateUser(c *fiber.Ctx) error {
 		})
 	}
 
-	validate := validator.New()
+	// validate := validator.New()
+
+	// Mulai transaksi
+	tx := database.DB.Begin()
+	if tx.Error != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"message": "Database error",
+		})
+	}
 
 	// Loop melalui array pengguna yang akan dibuat
 	var newUsers []models.Users
 	var validationErrors []error
+	var duplicateEmails []string
+
+	var wg sync.WaitGroup // Menunggu semua goroutine selesai
+	var mu sync.Mutex
+
 	for _, userCreate := range userCreates {
-		errValidate := validate.Struct(userCreate)
-		if errValidate != nil {
-			validationErrors = append(validationErrors, errValidate)
-			continue
-		}
+		wg.Add(1)
+		go func(userCreate models.UserCreate) {
+			defer wg.Done()
 
-		newUser := models.Users{
-			Name:      userCreate.Name,
-			Email:     userCreate.Email,
-			Address:   userCreate.Address,
-			CreatedAt: time.Now().UnixMilli(), // Mengatur created_at ke Unix timestamp dalam milidetik
-			UpdatedAt: time.Now().UnixMilli(),
-			DeletedAt: 0,
-			IsDeleted: false,
-		}
-		// show data response convertan epoch time (unix) tanpa dimasukin ke database
-		newUser.CreatedAtFormatted = time.Unix(0, newUser.CreatedAt*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
-		newUser.UpdatedAtFormatted = time.Unix(0, newUser.UpdatedAt*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
-		newUser.DeletedAtFormatted = ""
+			// Periksa apakah email sudah ada dalam transaksi (belum tersimpan di database)
+			var existingUser models.Users
+			if err := database.DB.First(&existingUser, "email =?", userCreate.Email).Error; err != nil {
+				mu.Lock() // Kunci mutex sebelum mengakses data bersamaan
+				defer mu.Unlock()
 
-		newUsers = append(newUsers, newUser)
+				hash, err := helper.HashingPassword(userCreate.Password)
+				if err != nil {
+					return
+				}
+
+				newUser := models.Users{
+					Name:      userCreate.Name,
+					Email:     userCreate.Email,
+					Address:   userCreate.Address,
+					Password:  hash,
+					CreatedAt: time.Now().UnixMilli(),
+					UpdatedAt: time.Now().UnixMilli(),
+					DeletedAt: 0,
+					IsDeleted: false,
+				}
+
+				// Show data response convertan epoch time (unix) tanpa dimasukkan ke database
+				newUser.CreatedAtFormatted = time.Unix(0, newUser.CreatedAt*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+				newUser.UpdatedAtFormatted = time.Unix(0, newUser.UpdatedAt*int64(time.Millisecond)).Format("2006-01-02 15:04:05")
+				newUser.DeletedAtFormatted = ""
+
+				// Simpan pengguna yang valid ke dalam slice
+				newUsers = append(newUsers, newUser)
+			} else {
+				mu.Lock() // Kunci mutex sebelum mengakses data bersamaan
+				defer mu.Unlock()
+
+				// Email sudah ada dalam transaksi, tambahkan ke daftar duplikat
+				duplicateEmails = append(duplicateEmails, userCreate.Email)
+			}
+		}(userCreate)
 	}
 
+	wg.Wait() // Tunggu semua goroutine selesai
+
 	if len(validationErrors) > 0 {
+		tx.Rollback() // Rollback transaksi jika ada kesalahan validasi
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"message": "Some users failed validation",
 			"errors":  validationErrors,
 		})
 	}
 
+	if len(duplicateEmails) > 0 {
+		tx.Rollback() // Rollback transaksi jika ada email yang duplikat
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message":    "Some users have duplicate emails",
+			"duplicates": duplicateEmails,
+		})
+	}
+
+	if len(newUsers) == 0 {
+		tx.Rollback() // Rollback transaksi jika tidak ada data yang valid
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "All users are duplicates",
+		})
+	}
+
 	// Simpan pengguna yang valid ke database
-	if err := database.DB.Create(&newUsers).Error; err != nil {
+	if err := tx.Create(&newUsers).Error; err != nil {
+		tx.Rollback() // Rollback transaksi jika ada kesalahan saat menyimpan
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"message": err.Error(),
 		})
 	}
+
+	// Commit transaksi jika semuanya berhasil
+	tx.Commit()
 
 	result := c.Status(http.StatusOK).JSON(fiber.Map{
 		"data":    newUsers,
@@ -117,7 +173,6 @@ func CreateUser(c *fiber.Ctx) error {
 	})
 
 	return result
-
 }
 
 func UpdateUser(c *fiber.Ctx) error {

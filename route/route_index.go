@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/tedjoskb/go-restapi-fiber/config"
 	"github.com/tedjoskb/go-restapi-fiber/controllers"
+	"github.com/tedjoskb/go-restapi-fiber/middleware"
 )
 
 func RouteInit(r *fiber.App) {
@@ -12,20 +13,21 @@ func RouteInit(r *fiber.App) {
 
 	// /api/
 	api := r.Group("/api")
+	api.Post("/login", middleware.Auth, controllers.Login)
 	// /api/user/
 	users := api.Group("/user")
-	users.Get("/", controllers.GetUserAll)
-	users.Get("/:id", controllers.GetUserById)
-	users.Post("/", controllers.CreateUser)
-	users.Put("/:id", controllers.UpdateUser)
-	users.Post("/update-multiple", controllers.UpdateMultipleUsers)
-	users.Post("/delete-user", controllers.SoftDeleteUser)
+	users.Get("/", middleware.Auth, controllers.GetUserAll)
+	users.Get("/:id", middleware.Auth, controllers.GetUserById)
+	users.Post("/", middleware.Auth, controllers.CreateUser)
+	users.Put("/:id", middleware.Auth, controllers.UpdateUser)
+	users.Post("/update-multiple", middleware.Auth, controllers.UpdateMultipleUsers)
+	users.Post("/delete-user", middleware.Auth, controllers.SoftDeleteUser)
 
 	book := api.Group("/books")
-	book.Get("/", controllers.Index)
-	book.Get("/:id", controllers.Show)
-	book.Post("/", controllers.Create)
-	book.Put("/:id", controllers.Update)
-	book.Delete("/:id", controllers.Delete)
+	book.Get("/", middleware.Auth, controllers.Index)
+	book.Get("/:id", middleware.Auth, controllers.Show)
+	book.Post("/", middleware.Auth, controllers.Create)
+	book.Put("/:id", middleware.Auth, controllers.Update)
+	book.Delete("/:id", middleware.Auth, controllers.Delete)
 
 }

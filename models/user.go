@@ -1,10 +1,10 @@
 package models
 
 type Users struct {
-	ID                 int64  `gorm:"primaryKey;autoIncrement" json:"user_id"`
+	ID                 int64  `gorm:"primaryKey;autoIncrement;index" json:"user_id"`
 	Name               string `gorm:"type:varchar(300)" json:"name"`
-	Email              string `gorm:"type:varchar(100)" json:"email"`
-	Password           string `gorm:"type:varchar(255)" json:"password"`
+	Email              string `gorm:"type:varchar(100);index" json:"email"`
+	Password           string `gorm:"column:password" json:"-"`
 	Address            string `gorm:"type:text" json:"address"`
 	CreatedAt          int64  `json:"created_at"`
 	UpdatedAt          int64  `json:"updated_at"`
@@ -18,9 +18,10 @@ type Users struct {
 }
 
 type UserCreate struct {
-	Name    string `gorm:"type:varchar(300)" json:"name" validate:"required"`
-	Email   string `gorm:"type:varchar(100)" json:"email" validate:"required"`
-	Address string `gorm:"type:text" json:"address" validate:"required"`
+	Name     string `gorm:"type:varchar(300)" json:"name" validate:"required"`
+	Email    string `gorm:"type:varchar(100)" json:"email" validate:"required,email,min=6,max=100"`
+	Address  string `gorm:"type:text" json:"address" validate:"required"`
+	Password string `gorm:"type:varchar(255)" json:"password" validate:"required,min=8"`
 }
 
 type UserUpdate struct {

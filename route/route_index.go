@@ -13,7 +13,7 @@ func RouteInit(r *fiber.App) {
 
 	// /api/
 	api := r.Group("/api")
-	api.Post("/login", middleware.Auth, controllers.Login)
+	api.Post("/login", controllers.Login)
 	// /api/user/
 	users := api.Group("/user")
 	users.Get("/", middleware.Auth, controllers.GetUserAll)

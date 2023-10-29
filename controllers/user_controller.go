@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"sync"
@@ -14,6 +15,8 @@ import (
 )
 
 func GetUserAll(c *fiber.Ctx) error {
+	userInfo := c.Locals("userInfo")
+	log.Println("user Info Data ::", userInfo)
 	var users []models.Users
 	database.DB.Table("users").Select("id, name, email, address, created_at, updated_at, is_deleted, deleted_at").
 		Where("is_deleted = ?", false).
